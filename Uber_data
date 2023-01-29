@@ -1,0 +1,84 @@
+import numpy as np np.set_printoptions(precision=3)
+import matplotlib.pyplot as plt
+%matplotlib inline
+import seaborn as sns sns.set(rc={"figure.dpi":100, "savefig.dpi":300}) sns.set_context("notebook") sns.set_style("ticks")
+import scipy
+import scipy.stats as st
+import urllib.request
+import os
+url = "https://github.com/PredictiveScienceLab/data-analytics-se/raw/master/lecturebook/data/uber-raw-data-apr14.csv"
+download(url)
+
+import pandas as pd
+p1_data = pd.read_csv('uber-raw-data-apr14.csv')
+loc_data = p1_data[['Lon', 'Lat']]
+
+box = ((loc_data.Lon.min(), loc_data.Lon.max(),loc_data.Lat.min(), loc_data.Lat.max()))
+url = "https://github.com/PredictiveScienceLab/data-analytics-se/raw/master/lecturebook/images/ny_map.png"
+download(url)
+ny_map = plt.imread('ny_map.png')
+p1_train_data = loc_data[:100000]
+from sklearn.cluster import MiniBatchKMeans
+kmeans = MiniBatchKMeans(n_clusters=20, batch_size=10) model = kmeans.fit(p1_train_data)
+
+fig, ax = plt.subplots(dpi=600)
+labels = model.predict(p1_train_data)
+ax.scatter(p1_train_data.Lon, p1_train_data.Lat, zorder=1, alpha= 0.5,
+           c=labels, s=0.001)
+ax.scatter(model.cluster_centers_[:, 1], model.cluster_centers_[:, 0],
+           zorder=2, color='red', s=1)
+ax.set_xlim(box[0],box[1])
+ax.set_ylim(box[2],box[3])
+ax.imshow(ny_map, zorder=0, extent=box, aspect= 'equal')
+ax.set_xlabel('Longitude')
+ax.set_ylabel('Latitude');
+
+
+# This part creates a stochastic model of pickups
+p1_train_data.shape[0]
+# We will pick the rate to be the number of pickups in April. # That's the best we can do with the info we have
+pickup_rate = p1_train_data.shape[0]
+# Here is the poisson random variable for the pickups pickup_number_model = st.poisson(pickup_rate)
+# And here is the requested histogram
+zs = pickup_number_model.rvs(10000)
+fig, ax = plt.subplots(dpi=100)
+ax.hist(zs, density=True, alpha=0.25) ax.set_xlabel('Number of pickups in a month') ax.set_ylabel('Probability');
+
+
+# this part estimates the spatial density of pickups
+from sklearn.mixture import GaussianMixture
+pickup_density_model = GaussianMixture(n_components=40).fit(p1_train_data)
+x = np.linspace(box[0], box[1])
+y = np.linspace(box[2],box[3])
+X, Y = np.meshgrid(x, y)
+XX = np.array([X.ravel(), Y.ravel()]).T
+Z = pickup_density_model.score_samples(XX)
+Z = Z.reshape(X.shape)
+fig, ax = plt.subplots(dpi=150)
+ax.set_xlim(box[0], box[1])
+ax.set_ylim(box[2], box[3])
+ax.imshow(ny_map, zorder=0, extent=box, aspect= 'equal')
+ax.scatter(loc_data.Lon, loc_data.Lat, zorder=1, alpha= 0.5, c='b', s=0.001)
+c = ax.contour(X, Y, Z, levels=np.linspace(-42, 6, 30))
+plt.colorbar(c)
+ax.set_xlabel('Longitude')
+ax.set_ylabel('Latitude');
+
+
+# this part samples some random months of pickups
+for s in range(5):
+# sample the number of pickups
+z = pickup_number_model.rvs()
+# now sample the pick up locations from the Gaussian mixture model
+locs = pickup_density_model.sample(z)[0] # Plot this sample on NYC map
+  fig, ax = plt.subplots(dpi=150)
+  ax.set_xlim(box[0], box[1])
+  ax.set_ylim(box[2], box[3])
+  ax.imshow(ny_map, zorder=0, extent=box, aspect= 'equal')
+  ax.scatter(locs[:, 0], locs[:, 1], zorder=1, alpha= 0.5, c='b', s=0.001)
+  ax.set_xlabel('Longitude')
+ax.set_ylabel('Latitude') ax.set_title('Sample #{0:d}'.format(s+1));
+
+
+
+
